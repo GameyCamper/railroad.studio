@@ -9,13 +9,14 @@ import {
     hasCargoLimits,
     isCargoType,
 } from './frames';
-import {Frame, NumericFrameState, Quadruplet, Railroad, SplineType} from './Railroad';
+import {Frame, Industry, NumericFrameState, Quadruplet, Railroad, SplineType} from './Railroad';
 import {GvasString, GvasText, gvasToString} from './Gvas';
 import {
     IndustryName,
     IndustryType,
     getIndustryName,
     industryInputLabels,
+    industryNames,
     industryOutputLabels,
 } from './industries';
 import {
@@ -107,10 +108,12 @@ export class Studio {
         // Map toolbar
         const mapButtons = document.createElement('div');
         mapButtons.classList.add('hstack', 'gap-2');
+        const btnEdit = this.createEditToolButton();
         const btnDelete = this.createDeleteToolButton();
         const {grpLayers, layers} = this.createLayersDropdown();
         mapButtons.replaceChildren(
             grpLayers,
+            btnEdit,
             btnDelete,
         );
         if (hasFrames) {
@@ -120,7 +123,7 @@ export class Studio {
                 this.createRerailToolButton(),
                 this.createDuplicateFrameToolButton(),
                 this.createMeasureFrameToolButton(),
-            ].forEach((e) => mapButtons.insertBefore(e, btnDelete));
+            ].forEach((e) => mapButtons.insertBefore(e, btnEdit));
         }
         const grpTrees = this.createTreesDropdown();
         const btnTreeBrush = this.createTreeBrushToolButton();
@@ -129,12 +132,12 @@ export class Studio {
             [
                 grpTrees,
                 btnTreeBrush,
-            ].forEach((e) => mapButtons.insertBefore(e, btnDelete));
+            ].forEach((e) => mapButtons.insertBefore(e, btnEdit));
         } else {
             // Enable vegetation tools based on railroad.vegetation
             [
                 this.createVegetationDropdown(grpTrees, btnTreeBrush),
-            ].forEach((e) => mapButtons.insertBefore(e, btnDelete));
+            ].forEach((e) => mapButtons.insertBefore(e, btnEdit));
         }
         if (hasSplines) {
             // Enable tools that only work for old splines
@@ -849,7 +852,27 @@ export class Studio {
         return btnMeasure;
     }
 
-    private createDeleteToolButton() {
+    private createEditToolButton() {
+        // Delete tool
+        const btnEdit = document.createElement('button');
+        const imgEdit = bootstrapIcon('bi-save-fill', 'Edit Tool');
+        const txtEdit = document.createTextNode(' Edit ');
+        btnEdit.classList.add('btn', 'btn-secondary');
+        btnEdit.replaceChildren(imgEdit, txtEdit);
+        btnEdit.addEventListener('click', () => {
+            const toolEnabled = this.map.toggleEditTool();
+            if (toolEnabled) {
+                btnEdit.classList.add('active', 'btn-danger');
+                btnEdit.classList.remove('btn-secondary');
+            } else {
+                btnEdit.classList.remove('active', 'btn-danger');
+                btnEdit.classList.add('btn-secondary');
+            }
+        });
+        return btnEdit;
+    }
+
+        private createDeleteToolButton() {
         // Delete tool
         const btnDelete = document.createElement('button');
         const imgDelete = bootstrapIcon('bi-eraser-fill', 'Delete Tool');
@@ -1663,6 +1686,211 @@ export class Studio {
             tr.appendChild(td);
         }
     }
+
+    industryEdit(dialog: HTMLElement, industry: Industry): void {
+        let elements = dialog.getElementsByClassName('modal-title');
+        if (elements) {
+            const industryName = getIndustryName(industry);
+        console.log("t industryName", industryName);
+            if (industryName !== null) {
+                elements[0].innerHTML = (industryNames[industryName] || 'Unknown');;
+            } else {
+                let name = 'unknown';
+                if( industry && industry.type) {
+                    name = industry.type.toString();
+                }
+                let span = document.createElement('span');
+                span.classList.add('table-warning');
+                span.innerHTML = name;
+            }
+        }
+
+        elements = dialog.getElementsByClassName('modal-body');
+        if (!elements) {
+            throw Error("Dialog does not contain a body!");
+        }
+
+        const body = elements[0];
+
+        const table = document.createElement('table');
+        table.classList.add('table');
+        body.replaceChildren(table);
+        let row = document.createElement('tr');
+        table.appendChild(row); // todo add class
+        let label = document.createElement('td'); // todo add class
+        //label.classList.add('form-label');
+        label.innerHTML = 'Industry Type';
+        row.appendChild(label);
+        let field = document.createElement('td');
+        row.appendChild(field);
+
+        if (typeof industry.type === 'number') {
+                    console.log("num industry type", industry.type);
+
+            const setIndustryType = (type: IndustryType) => industry.type = type;
+            field.appendChild(editIndustryType(this, industry.type, setIndustryType));
+        } else {
+            const industryName = getIndustryName(industry);
+        console.log("f industryName", industryName);
+            if (industryName !== null) {
+                const setIndustryName = (name: IndustryName) => industry.type = name;
+        console.log("f found industryName", industryName);
+                field.appendChild(editIndustryName(this, industryName, setIndustryName));
+            } else {
+        console.log("f not found industryName", industryName);
+                const setIndustryName = (name: GvasString) => industry.type = name;
+                field.appendChild(editString(this, industry.type, setIndustryName));
+                field.classList.add('table-warning');
+            }
+        }
+
+        row = document.createElement('tr');
+        table.appendChild(row); // todo add class
+        label = document.createElement('td'); // todo add class
+        //label.classList.add('form-label');
+        label.innerHTML = 'Inputs';
+        row.appendChild(label);
+        field = document.createElement('td');
+        console.log("adding ip", field);
+        row.appendChild(field);
+
+        // Inputs
+        const setIndustryInputs = (inputs: number[]) => industry.inputs = inputs as Quadruplet<number>;
+        const industryName = getIndustryName(industry);
+        const defaultLabelsI: Quadruplet<string> = [
+            'Unknown Input Slot 1',
+            'Unknown Input Slot 2',
+            'Unknown Input Slot 3',
+            'Unknown Input Slot 4',
+        ];
+        const inputLabels = industryName ? industryInputLabels[industryName] ?? defaultLabelsI : defaultLabelsI;
+        field.appendChild(editIndustryProducts(this, 'Input', inputLabels, industry.inputs, setIndustryInputs));
+        if (inputLabels === defaultLabelsI && !industry.inputs.every((v) => v === 0)) {
+            field.classList.add('table-warning');
+        }
+
+
+        row = document.createElement('tr');
+        table.appendChild(row); // todo add class
+        label = document.createElement('td'); // todo add class
+        //label.classList.add('form-label');
+        label.innerHTML = 'Outputs';
+        row.appendChild(label);
+
+        field = document.createElement('td');
+        const setIndustryOutputs = (outputs: number[]) => industry.outputs = outputs as Quadruplet<number>;
+        const defaultLabelsO: Quadruplet<string> = [
+            'Unknown Output Slot 1',
+            'Unknown Output Slot 2',
+            'Unknown Output Slot 3',
+            'Unknown Output Slot 4',
+        ];
+        const outputLabels = industryName ? industryOutputLabels[industryName] ?? defaultLabelsO : defaultLabelsO;
+        field.appendChild(editIndustryProducts(this, 'Output', outputLabels, industry.outputs, setIndustryOutputs));
+        if (outputLabels === defaultLabelsO && !industry.outputs.every((v) => v === 0)) {
+            field.classList.add('table-warning');
+        }
+        row.appendChild(field);
+
+
+        row = document.createElement('tr');
+        table.appendChild(row); // todo add class
+        label = document.createElement('td'); // todo add class
+        //label.classList.add('form-label');
+        label.innerHTML = 'Location';
+        row.appendChild(label);
+
+        field = document.createElement('td');
+        const setIndustryLocation = (location: Vector) => industry.location = location;
+        field.replaceChildren(editVector(this, industry.location, setIndustryLocation));
+        row.appendChild(field);
+
+        row = document.createElement('tr');
+        table.appendChild(row); // todo add class
+        label = document.createElement('td'); // todo add class
+        //label.classList.add('form-label');
+        label.innerHTML = 'Rotation';
+        row.appendChild(label);
+
+        field = document.createElement('td');
+        const setIndustryRotation = (rotation: Rotator) => industry.rotation = rotation;
+        field.replaceChildren(editRotator(this, industry.rotation, setIndustryRotation));
+        row.appendChild(field);
+
+
+        /*
+        for (const columnHeader of ['Industry Type', 'Inputs', 'Outputs', 'Location', 'Rotation']) {
+            const th = document.createElement('th');
+            th.textContent = columnHeader;
+            tr.appendChild(th);
+        }
+        const tbody = document.createElement('tbody');
+        table.appendChild(tbody);
+        for (const industry of this.railroad.industries) {
+            tr = document.createElement('tr');
+            tbody.appendChild(tr);
+            // Industry type
+            let td = document.createElement('td');
+            if (typeof industry.type === 'number') {
+                const setIndustryType = (type: IndustryType) => industry.type = type;
+                td.replaceChildren(editIndustryType(this, industry.type, setIndustryType));
+            } else {
+                const industryName = getIndustryName(industry);
+                if (industryName !== null) {
+                    const setIndustryName = (name: IndustryName) => industry.type = name;
+                    td.replaceChildren(editIndustryName(this, industryName, setIndustryName));
+                } else {
+                    const setIndustryName = (name: GvasString) => industry.type = name;
+                    td.replaceChildren(editString(this, industry.type, setIndustryName));
+                    td.classList.add('table-warning');
+                }
+            }
+            tr.appendChild(td);
+            // Inputs
+            td = document.createElement('td');
+            const setIndustryInputs = (inputs: number[]) => industry.inputs = inputs as Quadruplet<number>;
+            const industryName = getIndustryName(industry);
+            const defaultLabelsI: Quadruplet<string> = [
+                'Unknown Input Slot 1',
+                'Unknown Input Slot 2',
+                'Unknown Input Slot 3',
+                'Unknown Input Slot 4',
+            ];
+            const inputLabels = industryName ? industryInputLabels[industryName] ?? defaultLabelsI : defaultLabelsI;
+            td.appendChild(editIndustryProducts(this, 'Input', inputLabels, industry.inputs, setIndustryInputs));
+            if (inputLabels === defaultLabelsI && !industry.inputs.every((v) => v === 0)) {
+                td.classList.add('table-warning');
+            }
+            tr.appendChild(td);
+            // Outputs
+            td = document.createElement('td');
+            const setIndustryOutputs = (outputs: number[]) => industry.outputs = outputs as Quadruplet<number>;
+            const defaultLabelsO: Quadruplet<string> = [
+                'Unknown Output Slot 1',
+                'Unknown Output Slot 2',
+                'Unknown Output Slot 3',
+                'Unknown Output Slot 4',
+            ];
+            const outputLabels = industryName ? industryOutputLabels[industryName] ?? defaultLabelsO : defaultLabelsO;
+            td.appendChild(editIndustryProducts(this, 'Output', outputLabels, industry.outputs, setIndustryOutputs));
+            if (outputLabels === defaultLabelsO && !industry.outputs.every((v) => v === 0)) {
+                td.classList.add('table-warning');
+            }
+            tr.appendChild(td);
+            // Location
+            td = document.createElement('td');
+            const setIndustryLocation = (location: Vector) => industry.location = location;
+            td.replaceChildren(editVector(this, industry.location, setIndustryLocation));
+            tr.appendChild(td);
+            // Rotation
+            td = document.createElement('td');
+            const setIndustryRotation = (rotation: Rotator) => industry.rotation = rotation;
+            td.replaceChildren(editRotator(this, industry.rotation, setIndustryRotation));
+            tr.appendChild(td);
+        }
+            */
+    }
+
 
     private players(table: HTMLTableElement): void {
         this.setTitle('Players');

@@ -48,6 +48,7 @@ import {rect} from './util-path';
 
 enum MapToolMode {
     pan_zoom,
+    edit,
     delete,
     flatten_spline,
     tree_brush,
@@ -138,6 +139,8 @@ export class RailroadMap {
     private readonly layerVisibility = DEFAULT_LAYER_VISIBILITY;
     private readonly setMapModified;
     private readonly setTitle: (title: string) => void;
+    private readonly industryEdit: (dialog: HTMLElement, industry: Industry) => void;
+
     private brush?: Circle | undefined;
     private locator?: Circle | undefined;
     private remainingTreesAppender?: (trees: Vector[]) => Promise<void>;
@@ -147,6 +150,8 @@ export class RailroadMap {
     constructor(studio: Studio, element: HTMLElement, inverted: boolean) {
         this.setMapModified = (affectsSplines = false) => studio.setMapModified(affectsSplines);
         this.setTitle = (title) => studio.setTitle(title);
+        this.industryEdit = (dialog, industry) => studio.industryEdit(dialog, industry)
+
         this.railroad = studio.railroad;
         this.inverted = inverted;
         this.treeUtil = new TreeUtil(studio, async (before, after, changed, dryrun) => {
@@ -374,6 +379,23 @@ export class RailroadMap {
                 this.circularizeToolRadiusFlag = true;
                 this.toggleLayerVisibility('radius');
             }
+            return true;
+        }
+    }
+
+    toggleEditTool(): boolean {
+        if (this.toolMode === MapToolMode.edit) {
+            // Disable edit tool
+            this.toolMode = MapToolMode.pan_zoom;
+            this.panZoom.enableDblClickZoom();
+            return false;
+        } else if (this.toolMode !== MapToolMode.pan_zoom) {
+            // Don't allow edit tool while another tool is active
+            return false;
+        } else {
+            // Enable edit tool
+            this.toolMode = MapToolMode.edit;
+            this.panZoom.disableDblClickZoom();
             return true;
         }
     }
@@ -1013,6 +1035,7 @@ export class RailroadMap {
         return g;
     }
 
+
     private gizmoDebugLine?: Line | undefined;
     private gizmoDebugText?: Text | undefined;
     private renderIndustry(industry: Industry) {
@@ -1026,6 +1049,8 @@ export class RailroadMap {
             .attr('transform', industryTransform)
             .addClass('industry');
         g.element('title').words(tooltipText);
+        const onClick = () => this.onClickIndustry(industry, g, );
+        g.on('click', onClick);
         const renderPath = (g: G) => ([className, path]: [string, PathArrayAlias]) => g.path(path).addClass(className);
         if (industryName && industryName in industrySvgPaths) {
             g.addClass(industryName);
@@ -1730,9 +1755,49 @@ export class RailroadMap {
         return elements;
     }
 
+    private onClickIndustry(industry: Industry, g: G) {
+        if (this.renderLock) return;
+        switch (this.toolMode) {
+            case MapToolMode.edit:
+                console.log('Edit Industry -> ', industry);
+                const dialog = createEditModel();
+                this.industryEdit(dialog, industry);
+                dialog.style.display = 'block';
+                dialog.classList.add('show');
+                break;
+            case MapToolMode.delete:
+                this.railroad.industries = this.railroad.industries.filter((i) => i !== industry);
+                this.setMapModified(true);
+                g.remove();
+                break;
+/*                
+            case MapToolMode.duplicate:
+                this.toolFrame = frame;
+                this.toolFrameGroup = g;
+                this.setTitle('Select a spline to duplicate frame');
+                break;
+            case MapToolMode.measure:
+                if (this.toolFrame) {
+                    const d = distance(frame.location, this.toolFrame.location);
+                    this.setTitle(`${(d / 100).toFixed(3)}m`);
+                    console.log(`${d.toFixed(1)} ${this.toolFrame.type} -> ${frame.type}`);
+                } else {
+                    this.setTitle('Select another frame to measure');
+                }
+                this.toolFrame = frame;
+                this.toolFrameGroup = g;
+                break;
+                */
+        }
+
+    }
+
     private onClickFrame(frame: Frame, g: G) {
         if (this.renderLock) return;
         switch (this.toolMode) {
+            case MapToolMode.edit:
+                console.log('Edit frame -> ', frame);
+                break;
             case MapToolMode.delete:
                 this.railroad.frames = this.railroad.frames.filter((f) => f !== frame);
                 this.setMapModified(true);
@@ -1978,4 +2043,68 @@ function makeTransformT(startPoint: Vector, endPoint: Vector, invert: boolean) {
     const midPoint = scaleVector(vectorSum(startPoint, endPoint), 0.5);
     const heading = vectorHeading(startPoint, endPoint);
     return makeTransformF(midPoint, heading, invert);
+}
+
+function createEditModel(): HTMLElement {
+    var dialogContainer = document.getElementById('editDialog');
+
+    if (!dialogContainer) {
+      dialogContainer = document.createElement('div');
+      dialogContainer.id = 'editDialog';
+      document.body.appendChild(dialogContainer);
+    }
+
+    dialogContainer.innerHTML = `
+      <div id="editModal" class="modal modal-lg modal-dialog-scrollable fade" tabindex="-1">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title">Modal title</h5>
+              <button type="button" id="icon-close" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+            </div>
+            <div class="modal-footer">
+              <button type="button" id="btn-close" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    var dialog = document.getElementById('editModal');
+    if (!dialog) {
+        throw new Error("No editDialog created");
+    } else 
+
+
+    var closeButton = document.getElementById('icon-close');
+    if (closeButton) {
+      closeButton.addEventListener('click', (() => {
+              if (dialog) {
+                  dialog.style.display = 'none';
+                  dialog.classList.remove('show');
+              }
+          }));
+    }
+
+    closeButton = document.getElementById('btn-close');
+    if (closeButton) {
+      closeButton.addEventListener('click', (() => {
+              if (dialog) {
+                  dialog.style.display = 'none';
+                  dialog.classList.remove('show');
+              }
+          }));
+    }
+
+    document.onkeydown = function (evt) {
+      if(evt.key === "Escape") {
+        if (dialog) {
+          dialog.style.display = 'none';
+          dialog.classList.remove('show');
+        }
+      }
+    }        
+
+    return dialog;
 }
