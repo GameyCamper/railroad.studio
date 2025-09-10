@@ -1,3 +1,10 @@
+import {
+    writeSpreadSheet
+} from './util-exportImport';
+
+import {Frame} from './Railroad';
+
+
 export function createFilter<C extends string>(
     categories: readonly C[],
     labels: Record<string, string>,
@@ -6,6 +13,7 @@ export function createFilter<C extends string>(
     onOption?: (value: string) => void,
     checked?: { [k: string]: boolean },
     selected?: string,
+    frames?: Frame[],
 ) {
     const form = document.createElement('form');
     const row = document.createElement('div');
@@ -33,6 +41,27 @@ export function createFilter<C extends string>(
         col.appendChild(formCheck);
         row.appendChild(col);
     });
+    // TITS: Button
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Export';
+    btn.classList.add('btn', 'btn-secondary');
+    //    const mapDiv = document.createElement('div');
+    console.log("creating button", frames);
+    btn.addEventListener('click', () => {
+        console.log("creating spreadsheet", frames);
+        console.log("1");
+        if(frames) {
+            console.log("calling write spreadsheet");
+            writeSpreadSheet(frames);
+            console.log("101");
+        }
+        console.log("102");
+        console.log("finished sreadsheet");
+        });
+    row.appendChild(btn);
+
+
     form.appendChild(row);
     if (options && onOption) {
         const select = document.createElement('select');

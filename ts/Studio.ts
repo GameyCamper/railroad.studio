@@ -230,7 +230,9 @@ export class Studio {
             }
             // Create a dropdown entry for all
             options.unshift(['all', `All (${filteredCategory.length})`]);
-            const filterNav = createFilter(categories, labels, onFrameFilter, options, onOption, checked, frameSelect);
+    console.log("creating filter", railroad.frames);
+
+            const filterNav = createFilter(categories, labels, onFrameFilter, options, onOption, checked, frameSelect, railroad.frames);
             filterNav.classList.add('mt-5');
             const filtered = (frameSelect && frameSelect !== 'all') ?
                 filteredCategory.filter((f) => f.type === frameSelect || getFrameType(f.type) === frameSelect) :
